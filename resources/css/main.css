@@ -1,0 +1,36 @@
+h4 {
+  margin-left: 30px;
+}
+
+input {
+  margin-left: 30px;
+  border: 1px solid white;
+  border-radius: 7px;
+  background-color: transparent;
+  width: 400px;
+}
+
+input:focus {
+  border-color: cornflowerblue;
+  outline: 0;
+}
+
+#taskDesc {
+  font-family: Arial, serif;
+  font-style: italic;
+  font-size: 16px;
+}
+
+#status {
+  font-family: Arial, serif;
+  font-weight: bold;
+  font-size: 16px;
+}
+
+.TaskTimer {
+  margin-top: 10px;
+}
+
+.TaskTimer span {
+  border: 1px solid orangered;
+}
