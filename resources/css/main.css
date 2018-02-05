@@ -27,10 +27,24 @@ input:focus {
   font-size: 16px;
 }
 
-.TaskTimer {
+p#pauseButtons {
+  margin-left: 30px;
+}
+
+.PauseTimer {
   margin-top: 10px;
 }
 
-.TaskTimer span {
-  border: 1px solid orangered;
+.PauseTimer span {
+  border: 1px dashed green;
+  margin-left: 30px;
 }
+
+.ActivityTimer {
+  margin-top: 10px;
+}
+
+.ActivityTimer span {
+  border: 1px solid orange;
+}
+

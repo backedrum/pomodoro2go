@@ -18,11 +18,11 @@ func (tm *TaskMenu) Render() string {
 }
 
 func (tm *TaskMenu) OnStart() {
-	startTask()
+	startActivity(TASK)
 }
 
 func (tm *TaskMenu) OnStop() {
-	stopTask()
+	stopActivity()
 }
 
 func (tm *TaskMenu) OnNewTask() {

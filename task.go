@@ -8,95 +8,137 @@ import (
 )
 
 const (
-	// Task statuses
-	NEW         = "New"
-	IN_PROGRESS = "In Progress"
-	DONE        = "Done"
+	// Activity type
+	TASK       = ActivityType("Task")
+	PAUSE      = ActivityType("Pause")
+	LONG_PAUSE = ActivityType("Long pause")
+
+	// Activity statuses
+	NEW         = ActivityStatus("New")
+	IN_PROGRESS = ActivityStatus("In Progress")
+	DONE        = ActivityStatus("Done")
 
 	// Durations in minutes
-	TASK_LENGTH       = 1
+	TASK_LENGTH       = 25
 	PAUSE_LENGTH      = 5
 	LONG_PAUSE_LENGTH = 15
 )
 
-type Task struct {
+type ActivityType string
+type ActivityStatus string
+
+type Activity struct {
+	Type   ActivityType
 	Desc   string
-	Status string
+	Status ActivityStatus
 }
 
 type TaskBox struct {
-	Task
-	TaskTimer
+	Activity
+	ActivityTimer
 	ShowInput bool
 }
 
-type TaskTimer struct {
+type ActivityTimer struct {
 	Minutes string
 	Seconds string
 }
 
 var (
-	task    = &Task{}
-	taskBox = &TaskBox{ShowInput: true}
-	stop    = make(chan bool, 1)
+	task    = &Activity{}
+	taskBox = &TaskBox{ShowInput: true, Activity: Activity{Type: TASK}}
+
+	// type -> duration
+	durations = map[ActivityType]int{TASK: TASK_LENGTH, PAUSE: PAUSE_LENGTH, LONG_PAUSE: LONG_PAUSE_LENGTH}
+
+	// type -> progress icon
+	progressIcons = map[ActivityType]string{TASK: "resources/pomodoro.png", PAUSE: "resources/pause.png", LONG_PAUSE: "resources/pause.png"}
+
+	// type -> done icon
+	doneIcons = map[ActivityType]string{TASK: "resources/pomodoro_done.png", PAUSE: "resources/pomodoro.png", LONG_PAUSE: "resources/pomodoro.png"}
+
+	stop = make(chan bool, 1)
 )
 
-func (task *Task) Render() string {
+func (activity *Activity) Render() string {
 	return `
-    <div class="Task">
+    <div class="Activity">
         <h4>
             Enter your next task:
         </h4>
         <input type="text" placeholder="Next thing to do..." onchange="OnInputChange" />
+        <p id="pauseButtons">
+          <button onclick="OnPause">Short pause</button>
+          <button onclick="OnLongPause">Long pause</button>
+          <button onclick="OnStopPause">Stop</button>
+        </p>
     </div>
     `
+}
+
+func (*Activity) OnPause() {
+	taskBox.Status = NEW
+	startActivity(PAUSE)
+}
+
+func (*Activity) OnLongPause() {
+	taskBox.Status = NEW
+	startActivity(LONG_PAUSE)
+}
+
+func (*Activity) OnStopPause() {
+	stopActivity()
 }
 
 func (taskBox *TaskBox) Render() string {
 	return `
     <div class="TaskBox">
-      {{if eq .ShowInput true}}<Task></Task>{{else}}
-      <span oncontextmenu="OnContextMenu"><span id="taskDesc">{{html .Task.Desc}}</span>:<span id="status">{{html .Status}}</span></span>
+      {{if eq .ShowInput true}}<Activity></Activity>
+      {{if eq .Status "In Progress"}}<div class="PauseTimer"><span>{{html .ActivityTimer.Minutes}}:{{html .ActivityTimer.Seconds}}</span></div>{{end}}
+      {{else}}
+      <span oncontextmenu="OnContextMenu"><span id="taskDesc">{{html .Activity.Desc}}</span>:<span id="status">{{html .Status}}</span></span>
       <button onclick="OnStart">Start</button>
       <button onclick="OnStop">Stop</button>
       <button onclick="OnRemove">Remove</button>
+      {{if eq .Status "In Progress"}}<div class="ActivityTimer"><span>{{html .ActivityTimer.Minutes}}:{{html .ActivityTimer.Seconds}}</span></div>{{end}}
       {{end}}
-      {{if eq .Status "In Progress"}}<div class="TaskTimer"><span>{{html .TaskTimer.Minutes}}:{{html .TaskTimer.Seconds}}</span></div>{{end}}
     </div>
 `
 }
 
-func (taskBox *TaskBox) OnContextMenu() {
+func (*TaskBox) OnContextMenu() {
 	ctxMenu := app.NewContextMenu()
 	ctxMenu.Mount(&TaskMenu{})
 }
 
-func (taskBox *TaskBox) OnStart() {
-	startTask()
+func (*TaskBox) OnStart() {
+	startActivity(TASK)
 }
 
-func (taskBox *TaskBox) OnStop() {
-	stopTask()
+func (*TaskBox) OnStop() {
+	stopActivity()
 }
 
-func (taskBox *TaskBox) OnRemove() {
+func (*TaskBox) OnRemove() {
 	removeTask()
 }
 
-func (task *Task) OnInputChange(arg app.ChangeArg) {
-	task.Desc = arg.Value
-	task.Status = NEW
+func (*Activity) OnInputChange(arg app.ChangeArg) {
 	taskBox.ShowInput = false
-	taskBox.Desc = task.Desc
+	taskBox.Desc = arg.Value
 	taskBox.Status = NEW
 
 	app.Render(taskBox)
 }
 
-func startTask() {
+func startActivity(activityType ActivityType) {
 	if taskBox.Status == NEW {
+		taskBox.Type = activityType
+
+		duration := durations[activityType]
+
 		taskBox.Status = IN_PROGRESS
-		dock.SetIcon("resources/pomodoro.png")
+		dock.SetIcon(progressIcons[activityType])
 
 		go func() {
 			elapsed := 0
@@ -109,23 +151,23 @@ func startTask() {
 					if stopped {
 						defer app.Render(taskBox)
 						taskBox.Status = NEW
-						taskBox.TaskTimer.Minutes = strconv.Itoa(TASK_LENGTH)
-						taskBox.TaskTimer.Seconds = "00"
+						taskBox.ActivityTimer.Minutes = strconv.Itoa(duration)
+						taskBox.ActivityTimer.Seconds = "00"
 						dock.SetIcon("resources/pomodoro.png")
 						break ticker
 					}
 
 				default:
-					if elapsed > TASK_LENGTH*60 {
+					if elapsed > duration*60 {
 						taskBox.Status = DONE
-						taskBox.TaskTimer.Minutes = "00"
-						taskBox.TaskTimer.Seconds = "00"
-						dock.SetIcon("resources/pomodoro_done.png")
+						taskBox.ActivityTimer.Minutes = "00"
+						taskBox.ActivityTimer.Seconds = "00"
+						dock.SetIcon(doneIcons[activityType])
 						break ticker
 					}
 				}
 
-				mins := (TASK_LENGTH*60 - elapsed) / 60
+				mins := (duration*60 - elapsed) / 60
 
 				var secs int
 				remainder := elapsed % 60
@@ -135,8 +177,8 @@ func startTask() {
 					secs = 60 - elapsed%60
 				}
 
-				taskBox.TaskTimer.Minutes = fmt.Sprintf("%02d", mins)
-				taskBox.TaskTimer.Seconds = fmt.Sprintf("%02d", secs)
+				taskBox.ActivityTimer.Minutes = fmt.Sprintf("%02d", mins)
+				taskBox.ActivityTimer.Seconds = fmt.Sprintf("%02d", secs)
 				app.Render(taskBox)
 			}
 		}()
@@ -144,14 +186,14 @@ func startTask() {
 	}
 }
 
-func stopTask() {
-	if taskBox.Task.Status == IN_PROGRESS {
+func stopActivity() {
+	if taskBox.Activity.Status == IN_PROGRESS {
 		stop <- true
 	}
 }
 
 func removeTask() {
-	if taskBox.Task.Status == IN_PROGRESS {
+	if taskBox.Activity.Status == IN_PROGRESS {
 		stop <- true
 	}
 	task.Status = NEW

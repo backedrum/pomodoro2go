@@ -20,7 +20,7 @@ func main() {
 		win = app.NewWindow(app.Window{
 			Title:          "Pomodoro2Go Timer",
 			Width:          400,
-			Height:         50,
+			Height:         150,
 			TitlebarHidden: false,
 			Vibrancy:       app.VibeMediumLight,
 			OnClose: func() bool {
@@ -37,7 +37,7 @@ func main() {
 	}
 
 	app.OnFinalize = func() {
-		if taskBox.Task.Status == IN_PROGRESS {
+		if taskBox.Activity.Status == IN_PROGRESS {
 			stop <- true
 		}
 	}
