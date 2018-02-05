@@ -3,13 +3,20 @@ package main
 import (
 	"fmt"
 	"github.com/murlokswarm/app"
+	"strconv"
 	"time"
 )
 
 const (
+	// Task statuses
 	NEW         = "New"
 	IN_PROGRESS = "In Progress"
 	DONE        = "Done"
+
+	// Durations in minutes
+	TASK_LENGTH       = 1
+	PAUSE_LENGTH      = 5
+	LONG_PAUSE_LENGTH = 15
 )
 
 type Task struct {
@@ -88,8 +95,8 @@ func (task *Task) OnInputChange(arg app.ChangeArg) {
 
 func startTask() {
 	if taskBox.Status == NEW {
-		fmt.Println("Starting task..")
 		taskBox.Status = IN_PROGRESS
+		dock.SetIcon("resources/pomodoro.png")
 
 		go func() {
 			elapsed := 0
@@ -102,21 +109,23 @@ func startTask() {
 					if stopped {
 						defer app.Render(taskBox)
 						taskBox.Status = NEW
-						taskBox.TaskTimer.Minutes = "25"
+						taskBox.TaskTimer.Minutes = strconv.Itoa(TASK_LENGTH)
 						taskBox.TaskTimer.Seconds = "00"
+						dock.SetIcon("resources/pomodoro.png")
 						break ticker
 					}
 
 				default:
-					if elapsed > 25*60 {
+					if elapsed > TASK_LENGTH*60 {
 						taskBox.Status = DONE
 						taskBox.TaskTimer.Minutes = "00"
 						taskBox.TaskTimer.Seconds = "00"
+						dock.SetIcon("resources/pomodoro_done.png")
 						break ticker
 					}
 				}
 
-				mins := (25*60 - elapsed) / 60
+				mins := (TASK_LENGTH*60 - elapsed) / 60
 
 				var secs int
 				remainder := elapsed % 60
@@ -137,13 +146,11 @@ func startTask() {
 
 func stopTask() {
 	if taskBox.Task.Status == IN_PROGRESS {
-		fmt.Println("Stopping current task..")
 		stop <- true
 	}
 }
 
 func removeTask() {
-	fmt.Println("Switch back to task input..")
 	if taskBox.Task.Status == IN_PROGRESS {
 		stop <- true
 	}

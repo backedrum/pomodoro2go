@@ -6,7 +6,8 @@ import (
 )
 
 var (
-	win app.Windower
+	win  app.Windower
+	dock app.Docker
 )
 
 func init() {
@@ -27,7 +28,8 @@ func main() {
 			},
 		})
 
-		if dock, ok := app.Dock(); ok {
+		ok := false
+		if dock, ok = app.Dock(); ok {
 			dock.SetIcon("resources/pomodoro.png")
 		}
 
