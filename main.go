@@ -22,9 +22,26 @@ func main() {
 			Height:         50,
 			TitlebarHidden: false,
 			Vibrancy:       app.VibeMediumLight,
+			OnClose: func() bool {
+				return true
+			},
 		})
 
+		if dock, ok := app.Dock(); ok {
+			dock.SetIcon("resources/pomodoro.png")
+		}
+
 		win.Mount(taskBox)
+	}
+
+	app.OnFinalize = func() {
+		if taskBox.Task.Status == IN_PROGRESS {
+			stop <- true
+		}
+	}
+
+	app.OnTerminate = func() bool {
+		return true
 	}
 
 	app.Run()
