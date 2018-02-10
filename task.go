@@ -33,6 +33,14 @@ type Activity struct {
 	Status ActivityStatus
 }
 
+type DisabledActivities struct {
+	StopTaskDisabled       bool
+	StartTaskDisabled      bool
+	StartPauseDisabled     bool
+	StartLongPauseDisabled bool
+	StopBreakDisabled      bool
+}
+
 type TaskBox struct {
 	Activity
 	ActivityTimer
@@ -45,8 +53,10 @@ type ActivityTimer struct {
 }
 
 var (
-	task    = &Activity{}
-	taskBox = &TaskBox{ShowInput: true, Activity: Activity{Type: TASK}}
+	disabledActivities = &DisabledActivities{StopBreakDisabled: true, StopTaskDisabled: true}
+	task               = &Activity{}
+	taskBox            = &TaskBox{ShowInput: true, Activity: Activity{}}
+	taskMenu           = &TaskMenu{}
 
 	// type -> duration
 	durations = map[ActivityType]int{TASK: TASK_LENGTH, PAUSE: PAUSE_LENGTH, LONG_PAUSE: LONG_PAUSE_LENGTH}
@@ -68,9 +78,9 @@ func (activity *Activity) Render() string {
         </h4>
         <input type="text" placeholder="Next thing to do..." onchange="OnInputChange" />
         <p id="pauseButtons">
-          <button onclick="OnPause">Short pause</button>
-          <button onclick="OnLongPause">Long pause</button>
-          <button onclick="OnStopPause">Stop</button>
+          <button onclick="OnPause" {{if eq (.GetDisabledActivity "Pause" "start") true}}disabled="true"{{end}}>Short pause</button>
+          <button onclick="OnLongPause" {{if eq (.GetDisabledActivity "Long pause" "start") true}}disabled="true"{{end}}>Long pause</button>
+          <button onclick="OnStopPause" {{if eq (.GetDisabledActivity "Pause" "stop") true}}disabled="true"{{end}}>Stop</button>
         </p>
     </div>
     `
@@ -97,8 +107,8 @@ func (taskBox *TaskBox) Render() string {
       {{if eq .Status "In Progress"}}<div class="PauseTimer"><span>{{html .ActivityTimer.Minutes}}:{{html .ActivityTimer.Seconds}}</span></div>{{end}}
       {{else}}
       <span oncontextmenu="OnContextMenu"><span id="taskDesc">{{html .Activity.Desc}}</span>:<span id="status">{{html .Status}}</span></span>
-      <button onclick="OnStart">Start</button>
-      <button onclick="OnStop">Stop</button>
+      <button onclick="OnStart" {{if eq (.GetDisabledActivity "Task" "start") true}}disabled="true"{{end}}>Start</button>
+      <button onclick="OnStop" {{if eq (.GetDisabledActivity "Task" "stop") true}}disabled="true"{{end}}>Stop</button>
       <button onclick="OnRemove">Remove</button>
       {{if eq .Status "In Progress"}}<div class="ActivityTimer"><span>{{html .ActivityTimer.Minutes}}:{{html .ActivityTimer.Seconds}}</span></div>{{end}}
       {{end}}
@@ -127,6 +137,7 @@ func (*Activity) OnInputChange(arg app.ChangeArg) {
 	taskBox.ShowInput = false
 	taskBox.Desc = arg.Value
 	taskBox.Status = NEW
+	updateDisabledActivities(taskBox.Activity.Type, NEW)
 
 	app.Render(taskBox)
 }
@@ -138,6 +149,7 @@ func startActivity(activityType ActivityType) {
 		duration := durations[activityType]
 
 		taskBox.Status = IN_PROGRESS
+		updateDisabledActivities(taskBox.Activity.Type, IN_PROGRESS)
 		dock.SetIcon(progressIcons[activityType])
 
 		go func() {
@@ -151,6 +163,7 @@ func startActivity(activityType ActivityType) {
 					if stopped {
 						defer app.Render(taskBox)
 						taskBox.Status = NEW
+						updateDisabledActivities(taskBox.Activity.Type, NEW)
 						taskBox.ActivityTimer.Minutes = strconv.Itoa(duration)
 						taskBox.ActivityTimer.Seconds = "00"
 						dock.SetIcon("resources/pomodoro.png")
@@ -160,6 +173,7 @@ func startActivity(activityType ActivityType) {
 				default:
 					if elapsed > duration*60 {
 						taskBox.Status = DONE
+						updateDisabledActivities(taskBox.Activity.Type, DONE)
 						taskBox.ActivityTimer.Minutes = "00"
 						taskBox.ActivityTimer.Seconds = "00"
 						dock.SetIcon(doneIcons[activityType])
@@ -197,8 +211,49 @@ func removeTask() {
 		stop <- true
 	}
 	task.Status = NEW
+
+	updateDisabledActivities(taskBox.Activity.Type, NEW)
+
 	task.Desc = ""
 	taskBox.ShowInput = true
 
 	app.Render(taskBox)
+}
+
+func updateDisabledActivities(activityType ActivityType, status ActivityStatus) {
+	disabledActivities.StartPauseDisabled = status == IN_PROGRESS
+	disabledActivities.StartLongPauseDisabled = status == IN_PROGRESS
+	disabledActivities.StartTaskDisabled = status == IN_PROGRESS
+
+	switch activityType {
+	case TASK:
+		disabledActivities.StopBreakDisabled = status == IN_PROGRESS
+		disabledActivities.StopTaskDisabled = status == NEW || status == DONE
+	case PAUSE, LONG_PAUSE:
+		disabledActivities.StopBreakDisabled = status != IN_PROGRESS
+		disabledActivities.StopTaskDisabled = status == IN_PROGRESS
+	}
+}
+
+func (*Activity) GetDisabledActivity(activityType, actionType string) bool {
+
+	switch ActivityType(activityType) {
+	case TASK:
+		if actionType == "start" {
+			return disabledActivities.StartTaskDisabled
+		}
+		return disabledActivities.StopTaskDisabled
+	case PAUSE:
+		if actionType == "start" {
+			return disabledActivities.StartPauseDisabled
+		}
+		return disabledActivities.StopBreakDisabled
+	case LONG_PAUSE:
+		if actionType == "start" {
+			return disabledActivities.StartLongPauseDisabled
+		}
+		return disabledActivities.StopBreakDisabled
+	}
+
+	return false
 }
